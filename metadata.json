@@ -1,0 +1,5 @@
+{
+  "name": "Environmental Monitoring Dashboard",
+  "description": "A real-time dashboard to visualize noise and vibration sensor data from a Firebase Realtime Database, built with React, TypeScript, and Tailwind CSS.",
+  "requestFramePermissions": []
+}
