@@ -9,8 +9,8 @@ admin.initializeApp();
 const db = admin.database();
 
 // Obtén las credenciales de Telegram desde la configuración de Firebase
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const TELEGRAM_BOT_TOKEN = functions.config().telegram.token;
+const TELEGRAM_CHAT_ID = functions.config().telegram.chat_id;
 
 const NOISE_THRESHOLD_DB = 85.0; // Umbral para estado "Rojo"
 const DURATION_MINUTES = 1; 
