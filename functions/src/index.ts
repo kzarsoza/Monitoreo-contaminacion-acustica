@@ -1,5 +1,4 @@
 // functions/src/index.ts
-
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import * as https from "https"; // Importa el módulo https de Node.js
@@ -13,109 +12,104 @@ const TELEGRAM_BOT_TOKEN = functions.config().telegram.token;
 const TELEGRAM_CHAT_ID = functions.config().telegram.chat_id;
 
 const NOISE_THRESHOLD_DB = 85.0; // Umbral para estado "Rojo"
-const DURATION_MINUTES = 1; 
+const DURATION_MINUTES = 1;
 const DURATION_SECONDS = DURATION_MINUTES * 60;
 
 /**
- * Interface for the structure of a single measurement in the database.
- */
+* Interface for the structure of a single measurement in the database.
+*/
 interface Measurement {
-  estado: string;
-  fecha: string;
-  nivel_dB: string;
-  vibracion_ms2: string;
-}
-
-function escapeMarkdownV2(text: string): string {
-  return text.replace(/(\_|\*|\[|\]|\(|\)|\~|\`|\>|\#|\+|\-|\=|\{|\||\}|\.|\!)/g, '\\$1');
+    estado: string;
+    fecha: string;
+    nivel_dB: string;
+    vibracion_ms2: string;
 }
 
 /**
- * This Cloud Function triggers whenever new data is written to /mediciones/{deviceId}.
- * It checks if the noise level has been consistently high for a specified duration
- * and sends a Telegram alert if the condition is met.
- */
+* This Cloud Function triggers whenever new data is written to /mediciones/{deviceld}.
+* It checks if the noise level has been consistently high for a specified duration
+* and sends a Telegram alert if the condition is met.
+*/
 export const checkNoiseLevel = functions.database
-  .ref("/mediciones/{deviceId}/{timestamp}")
-  .onWrite(async (change, context) => {
-    if (!change.after.exists()) {
-      return null;
-    }
+    .ref("/mediciones/{deviceId}/{timestamp}")
+    .onWrite(async (change, context) => {
+        if (!change.after.exists()) {
+            return null;
+        }
 
-    const { deviceId } = context.params;
-    const newMeasurement = change.after.val() as Measurement;
-    const alertStatusRef = db.ref(`/alert_status/${deviceId}`);
+        const { deviceId } = context.params;
+        const newMeasurement = change.after.val() as Measurement;
+        const alertStatusRef = db.ref(`/alert_status/${deviceId}`);
 
-    if (newMeasurement.estado.toLowerCase() === "rojo") {
-      const alertStatusSnapshot = await alertStatusRef.once("value");
-      if (alertStatusSnapshot.val()?.alerted === true) {
-        console.log(`[${deviceId}] Ya se ha enviado una alerta. No se necesita acción.`);
+        if (newMeasurement.estado.toLowerCase() === "rojo") {
+            const alertStatusSnapshot = await alertStatusRef.once("value");
+            if (alertStatusSnapshot.val()?.alerted === true) {
+                console.log(`[${deviceId}] Ya se ha enviado una alerta. No se necesita acción.`);
+                return null;
+            }
+            console.log(`[${deviceId}] Estado 'Rojo' detectado. Enviando alerta...`);
+            await sendTelegramAlert(deviceId, newMeasurement);
+            await alertStatusRef.set({ alerted: true });
+        } else {
+            await alertStatusRef.set({ alerted: false });
+            console.log(`[${deviceId}] El estado no es 'Rojo'. Se reinicia el estado de la alerta.`);
+        }
         return null;
-      }
-      console.log(`[${deviceId}] Estado 'Rojo' detectado. Enviando alerta...`);
-      await sendTelegramAlert(deviceId, newMeasurement);
-      await alertStatusRef.set({ alerted: true });
-    } else {
-      await alertStatusRef.set({ alerted: false });
-      console.log(`[${deviceId}] El estado no es 'Rojo'. Se reinicia el estado de la alerta.`);
-    }
-
-    return null;
-  });
+    });
 
 /**
- * Sends an alert message to a Telegram chat using the Telegram Bot API.
- * @param {string} deviceId The ID of the device that triggered the alert.
- * @param {Measurement} measurement The latest measurement data.
- */
+* Sends an alert message to a Telegram chat using the Telegram Bot API.
+* @param {string} deviceId The ID of the device that triggered the alert.
+* @param {Measurement} measurement The latest measurement data.
+*/
 async function sendTelegramAlert(deviceId: string, measurement: Measurement) {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-    console.error("Error: El token del bot de Telegram o el ID del chat no están configurados en las variables de entorno.");
-    return;
-  }
+    if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+        console.error("Error: El token del bot de Telegram o el ID del chat no están configurados en las variables de entorno.");
+        return;
+    }
 
-  const message = `Alerta de Ruido: ${deviceId} - Nivel: ${measurement.nivel_dB} - Fecha: ${measurement.fecha}`;
+    const message = `Alerta de Ruido: ${deviceId} - Nivel: ${measurement.nivel_dB} - Fecha: ${measurement.fecha}`;
 
-  const data = JSON.stringify({
-    chat_id: TELEGRAM_CHAT_ID,
-    text: message,
-  });
-
-  const options = {
-    hostname: 'api.telegram.org',
-    port: 443,
-    path: `/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': data.length,
-    },
-  };
-
-  return new Promise<void>((resolve, reject) => {
-    const req = https.request(options, (res) => {
-      let responseBody = '';
-      res.on('data', (chunk) => {
-        responseBody += chunk;
-      });
-      res.on('end', () => {
-        console.log(`[${deviceId}] Telegram API response:`, responseBody);
-        if (res.statusCode === 200) {
-          console.log(`[${deviceId}] Alerta de Telegram enviada con éxito.`);
-          resolve();
-        } else {
-          console.error(`[${deviceId}] Error al enviar la alerta de Telegram: ${res.statusCode}`, responseBody);
-          reject(new Error(`Telegram API responded with status code ${res.statusCode}`));
-        }
-      });
+    const data = JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: message,
     });
 
-    req.on('error', (error) => {
-      console.error(`[${deviceId}] Error en la solicitud a la API de Telegram:`, error);
-      reject(error);
-    });
+    const options = {
+        hostname: 'api.telegram.org',
+        port: 443,
+        path: `/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': data.length,
+        },
+    };
 
-    req.write(data);
-    req.end();
-  });
+    return new Promise<void>((resolve, reject) => {
+        const req = https.request(options, (res) => {
+            let responseBody = '';
+            res.on('data', (chunk) => {
+                responseBody += chunk;
+            });
+            res.on('end', () => {
+                console.log(`[${deviceId}] Telegram API response:`, responseBody);
+                if (res.statusCode === 200) {
+                    console.log(`[${deviceId}] Alerta de Telegram enviada con éxito.`);
+                    resolve();
+                } else {
+                    console.error(`[${deviceId}] Error al enviar la alerta de Telegram: ${res.statusCode}`, responseBody);
+                    reject(new Error(`Telegram API responded with status code ${res.statusCode}`));
+                }
+            });
+        });
+
+        req.on('error', (error) => {
+            console.error(`[${deviceId}] Error en la solicitud a la API de Telegram:`, error);
+            reject(error);
+        });
+
+        req.write(data);
+        req.end();
+    });
 }
