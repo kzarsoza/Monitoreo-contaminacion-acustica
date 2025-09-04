@@ -1,19 +1,18 @@
 // functions/src/index.ts
-import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import * as https from "https"; // Importa el módulo https de Node.js
+import { onValueWritten } from "firebase-functions/v2/database";
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
 const db = admin.database();
 
-// Obtén las credenciales de Telegram desde la configuración de Firebase
-const TELEGRAM_BOT_TOKEN = functions.config().telegram.token;
-const TELEGRAM_CHAT_ID = functions.config().telegram.chat_id;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-const NOISE_THRESHOLD_DB = 85.0; // Umbral para estado "Rojo"
-const DURATION_MINUTES = 1;
-const DURATION_SECONDS = DURATION_MINUTES * 60;
+// const NOISE_THRESHOLD_DB = 85.0; // Umbral para estado "Rojo" - Unused
+// const DURATION_MINUTES = 1; // Unused
+// const DURATION_SECONDS = DURATION_MINUTES * 60; // Unused
 
 /**
 * Interface for the structure of a single measurement in the database.
@@ -26,36 +25,36 @@ interface Measurement {
 }
 
 /**
-* This Cloud Function triggers whenever new data is written to /mediciones/{deviceld}.
+* This Cloud Function triggers whenever new data is written to /mediciones/{deviceId}.
 * It checks if the noise level has been consistently high for a specified duration
 * and sends a Telegram alert if the condition is met.
 */
-export const checkNoiseLevel = functions.database
-    .ref("/mediciones/{deviceId}/{timestamp}")
-    .onWrite(async (change, context) => {
-        if (!change.after.exists()) {
+export const checkNoiseLevel = onValueWritten("/mediciones/{deviceId}/{timestamp}", async (event) => {
+    const change = event.data;
+    if (!change.after.exists()) {
+        return null;
+    }
+
+    const { deviceId } = event.params;
+    const newMeasurement = change.after.val() as Measurement;
+    const alertStatusRef = db.ref(`/alert_status/${deviceId}`);
+
+    if (newMeasurement.estado.toLowerCase() === "rojo") {
+        const alertStatusSnapshot = await alertStatusRef.once("value");
+        if (alertStatusSnapshot.val()?.alerted === true) {
+            console.log(`[${deviceId}] Ya se ha enviado una alerta. No se necesita acción.`);
             return null;
         }
+        console.log(`[${deviceId}] Estado 'Rojo' detectado. Enviando alerta...`);
+        await sendTelegramAlert(deviceId, newMeasurement);
+        await alertStatusRef.set({ alerted: true });
+    } else {
+        await alertStatusRef.set({ alerted: false });
+        console.log(`[${deviceId}] El estado no es 'Rojo'. Se reinicia el estado de la alerta.`);
+    }
+    return null;
+});
 
-        const { deviceId } = context.params;
-        const newMeasurement = change.after.val() as Measurement;
-        const alertStatusRef = db.ref(`/alert_status/${deviceId}`);
-
-        if (newMeasurement.estado.toLowerCase() === "rojo") {
-            const alertStatusSnapshot = await alertStatusRef.once("value");
-            if (alertStatusSnapshot.val()?.alerted === true) {
-                console.log(`[${deviceId}] Ya se ha enviado una alerta. No se necesita acción.`);
-                return null;
-            }
-            console.log(`[${deviceId}] Estado 'Rojo' detectado. Enviando alerta...`);
-            await sendTelegramAlert(deviceId, newMeasurement);
-            await alertStatusRef.set({ alerted: true });
-        } else {
-            await alertStatusRef.set({ alerted: false });
-            console.log(`[${deviceId}] El estado no es 'Rojo'. Se reinicia el estado de la alerta.`);
-        }
-        return null;
-    });
 
 /**
 * Sends an alert message to a Telegram chat using the Telegram Bot API.
