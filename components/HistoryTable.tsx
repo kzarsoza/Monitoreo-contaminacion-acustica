@@ -16,7 +16,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ data }) => {
   );
 
   return (
-    <div className="max-h-96 overflow-y-auto pr-2">
+    <div className="max-h-96 overflow-y-auto overflow-x-auto pr-2">
       <table className="w-full text-sm text-left text-gray-300">
         <thead className="text-xs text-gray-400 uppercase bg-gray-800 sticky top-0">
           <tr>

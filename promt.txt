@@ -1,216 +1,28 @@
-¡Claro! Integrar notificaciones de Telegram en tu proyecto de Firebase es una excelente idea para recibir alertas en tiempo real. A continuación, te explico paso a paso cómo puedes hacerlo, modificando tus Cloud Functions existentes.
+Aquí tienes las instrucciones en el formato que solicitaste. Puedes copiar este texto, pegarlo en un archivo `.txt` y pasárselo al CLI.
 
-El proceso consiste en crear una nueva función que se comunique con la API de Telegram y llamarla cuando se cumpla la condición de "estado Rojo".
+---
 
-Paso 1: Obtener el Token de tu Bot y el ID del Chat
-Antes de escribir el código, necesitas dos piezas clave de Telegram:
+**Asunto: Tarea de Modificación de Código para Mejorar el Diseño Responsivo**
 
-Bot Token:
+Hola, necesito tu ayuda para realizar un ajuste en mi proyecto de monitoreo y asegurar que sea completamente responsivo en dispositivos móviles.
 
-Abre Telegram y busca a @BotFather.
+**Análisis del Proyecto:**
 
-Envía el comando /newbot.
+He revisado el archivo `kzarsoza/kk/KK-57b8c43dcf98dbdf1084af90ea9/components/Dashboard.tsx`. Este componente ya está muy bien configurado para ser responsivo. Utiliza clases de Tailwind CSS como `flex-col lg:flex-row` y `grid-cols-1 sm:grid-cols-2`, lo que permite que la barra lateral y el contenido principal se apilen correctamente en pantallas pequeñas.
 
-Sigue las instrucciones para darle un nombre y un nombre de usuario a tu bot.
+**El Problema:**
 
-BotFather te proporcionará un token de acceso. Guárdalo, lo necesitarás en un momento.
+El único componente que presenta un problema es la tabla de "Datos Históricos". En el archivo `kzarsoza/kk/KK-57b8c43dcf98dbdf1084af90ea9/components/HistoryTable.tsx`, la tabla tiene varias columnas (`Fecha`, `Ruido`, `Vibración`, `Estado`) que son demasiado anchas para una vista móvil. Esto hace que el contenido se desborde y rompa el diseño de la página.
 
-Chat ID:
+**Instrucciones de Modificación:**
 
-Crea un nuevo grupo en Telegram y añade a tu bot recién creado.
+Para solucionar esto, necesito que apliques un pequeño cambio en el archivo `HistoryTable.tsx` para permitir el desplazamiento horizontal *solo* en ese componente:
 
-Envía cualquier mensaje al grupo.
+* **Archivo a modificar:** `kzarsoza/kk/KK-57b8c43dcf98dbdf1084af90ea9/components/HistoryTable.tsx`
+* **Tarea:** Localiza el primer elemento `div` dentro del `return` del componente.
+* **Código a buscar (Original):** Este `div` actualmente tiene la siguiente `className`:
+    `className="max-h-96 overflow-y-auto pr-2"`
+* **Código a aplicar (Modificado):** Por favor, añade la utilidad `overflow-x-auto` a esa `className`. La línea debe quedar así:
+    `className="max-h-96 overflow-y-auto overflow-x-auto pr-2"`
 
-Abre tu navegador web y visita la siguiente URL, reemplazando TU_BOT_TOKEN con el token que obtuviste:
-
-https://api.telegram.org/bot<TU_BOT_TOKEN>/getUpdates
-Busca en la respuesta un objeto JSON. Dentro de result, encontrarás un objeto chat con un id. Este es tu Chat ID. Será un número negativo si es un grupo.
-
-Paso 2: Configurar las Variables de Entorno en Firebase
-Para mantener tus credenciales seguras, no las escribas directamente en el código. En su lugar, configúralas como variables de entorno en Firebase Functions.
-
-Abre una terminal en la raíz de tu proyecto y ejecuta los siguientes comandos, reemplazando los valores de ejemplo con tus propios datos:
-
-Bash
-
-firebase functions:config:set telegram.token="8463680273:AAG5JVfKFiJUz4v2t7sMIXeMLTwcS9ifmSA"
-firebase functions:config:set telegram.chat_id="-1002810115264"
-Paso 3: Modificar tu Cloud Function
-Ahora, vamos a editar el archivo functions/src/index.ts para enviar la notificación a Telegram en lugar del correo electrónico.
-
-Aquí está el código actualizado. He añadido una función sendTelegramAlert y la he llamado desde checkNoiseLevel cuando el estado es "Rojo" de forma sostenida.
-
-TypeScript
-
-// functions/src/index.ts
-
-import * as functions from "firebase-functions";
-import * as admin from "firebase-admin";
-import * as https from "https"; // Importa el módulo https de Node.js
-
-// Initialize Firebase Admin SDK
-admin.initializeApp();
-const db = admin.database();
-
-// Obtén las credenciales de Telegram desde la configuración de Firebase
-const TELEGRAM_BOT_TOKEN = functions.config().telegram.token;
-const TELEGRAM_CHAT_ID = functions.config().telegram.chat_id;
-
-const NOISE_THRESHOLD_DB = 85.0; // Umbral para estado "Rojo"
-const DURATION_MINUTES = 1; 
-const DURATION_SECONDS = DURATION_MINUTES * 60;
-
-/**
- * Interface for the structure of a single measurement in the database.
- */
-interface Measurement {
-  estado: string;
-  fecha: string;
-  nivel_dB: string;
-  vibracion_ms2: string;
-}
-
-/**
- * This Cloud Function triggers whenever new data is written to /mediciones/{deviceId}.
- * It checks if the noise level has been consistently high for a specified duration
- * and sends a Telegram alert if the condition is met.
- */
-export const checkNoiseLevel = functions.database
-  .ref("/mediciones/{deviceId}/{timestamp}")
-  .onWrite(async (change, context) => {
-    if (!change.after.exists()) {
-      return null;
-    }
-
-    const { deviceId } = context.params;
-    const newMeasurement = change.after.val() as Measurement;
-    const alertStatusRef = db.ref(`/alert_status/${deviceId}`);
-
-    // Si el estado es "Rojo", se procede con la lógica de alerta.
-    if (newMeasurement.estado.toLowerCase() !== "rojo") {
-      await alertStatusRef.set({ alerted: false });
-      console.log(`[${deviceId}] El estado no es 'Rojo'. Se reinicia el estado de la alerta.`);
-      return null;
-    }
-
-    console.log(`[${deviceId}] Estado 'Rojo' detectado. Verificando condiciones...`);
-
-    const alertStatusSnapshot = await alertStatusRef.once("value");
-    if (alertStatusSnapshot.val()?.alerted === true) {
-      console.log(`[${deviceId}] Ya se ha enviado una alerta. No se necesita acción.`);
-      return null;
-    }
-
-    const oneMinuteAgo = Math.floor(Date.now() / 1000) - DURATION_SECONDS;
-    const recentDataRef = db.ref(`/mediciones/${deviceId}`)
-      .orderByKey()
-      .startAt(String(oneMinuteAgo));
-
-    const recentDataSnapshot = await recentDataRef.once("value");
-    const recentMeasurements = recentDataSnapshot.val() as { [key: string]: Measurement };
-
-    if (!recentMeasurements) {
-      console.log(`[${deviceId}] No hay suficientes datos en el último minuto.`);
-      return null;
-    }
-
-    const allRecordsAreRed = Object.values(recentMeasurements).every(
-      (m) => m.estado.toLowerCase() === "rojo"
-    );
-
-    if (allRecordsAreRed) {
-      console.log(`[${deviceId}] Condición cumplida: Estado 'Rojo' sostenido por ${DURATION_MINUTES} minuto(s).`);
-      
-      // Enviar la alerta de Telegram
-      await sendTelegramAlert(deviceId, newMeasurement);
-
-      await alertStatusRef.set({ alerted: true });
-    } else {
-      console.log(`[${deviceId}] Estado 'Rojo' detectado, pero no sostenido durante el tiempo requerido.`);
-    }
-
-    return null;
-  });
-
-/**
- * Sends an alert message to a Telegram chat using the Telegram Bot API.
- * @param {string} deviceId The ID of the device that triggered the alert.
- * @param {Measurement} measurement The latest measurement data.
- */
-async function sendTelegramAlert(deviceId: string, measurement: Measurement) {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-    console.error("Error: El token del bot de Telegram o el ID del chat no están configurados en las variables de entorno.");
-    return;
-  }
-
-  const message = `🚨 *¡Alerta de Exposición a Ruido Elevado!* 🚨\n\nSe ha detectado un nivel de ruido que supera el umbral establecido de forma sostenida.\n\n*Sensor ID:* \`${deviceId}\`\n*Nivel de Ruido:* ${measurement.nivel_dB}\n*Fecha:* ${measurement.fecha}\n\nSe recomienda tomar precauciones en la zona monitoreada.`;
-
-  const data = JSON.stringify({
-    chat_id: TELEGRAM_CHAT_ID,
-    text: message,
-    parse_mode: 'Markdown',
-  });
-
-  const options = {
-    hostname: 'api.telegram.org',
-    port: 443,
-    path: `/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': data.length,
-    },
-  };
-
-  return new Promise<void>((resolve, reject) => {
-    const req = https.request(options, (res) => {
-      let responseBody = '';
-      res.on('data', (chunk) => {
-        responseBody += chunk;
-      });
-      res.on('end', () => {
-        if (res.statusCode === 200) {
-          console.log(`[${deviceId}] Alerta de Telegram enviada con éxito.`);
-          resolve();
-        } else {
-          console.error(`[${deviceId}] Error al enviar la alerta de Telegram: ${res.statusCode}`, responseBody);
-          reject(new Error(`Telegram API responded with status code ${res.statusCode}`));
-        }
-      });
-    });
-
-    req.on('error', (error) => {
-      console.error(`[${deviceId}] Error en la solicitud a la API de Telegram:`, error);
-      reject(error);
-    });
-
-    req.write(data);
-    req.end();
-  });
-}
-Cambios Clave en el Código:
-Importación de https: Se añadió import * as https from "https"; para poder realizar solicitudes HTTP a la API de Telegram sin necesidad de instalar paquetes adicionales.
-
-Lectura de Variables de Entorno: El código ahora lee TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID desde la configuración de Firebase que estableciste en el paso 2.
-
-Lógica de checkNoiseLevel Actualizada:
-
-La función ahora se activa específicamente cuando newMeasurement.estado.toLowerCase() === "rojo".
-
-Cuando la condición de "Rojo" sostenido se cumple, llama a la nueva función sendTelegramAlert.
-
-Nueva Función sendTelegramAlert:
-
-Construye el mensaje de alerta "Alerta de exposición que supera al umbral establecido".
-
-Realiza una solicitud POST a la API de Telegram para enviar el mensaje a tu grupo.
-
-Paso 4: Desplegar la Función Actualizada
-Finalmente, para que los cambios surtan efecto, necesitas desplegar tus Cloud Functions actualizadas.
-
-En tu terminal, desde la raíz del proyecto, ejecuta:
-
-Bash
-
-firebase deploy --only functions
-¡Y eso es todo! Ahora, cada vez que tu base de datos registre un estado "Rojo" de forma sostenida durante un minuto, recibirás una notificación instantánea en tu grupo de Telegram.
+Este cambio hará que la tabla pueda deslizarse horizontalmente en pantallas pequeñas si el contenido es demasiado ancho, sin afectar el resto del diseño responsivo de la aplicación.
