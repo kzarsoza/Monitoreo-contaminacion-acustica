@@ -1,28 +1,71 @@
-Aquí tienes las instrucciones en el formato que solicitaste. Puedes copiar este texto, pegarlo en un archivo `.txt` y pasárselo al CLI.
+¡Ah, qué frustrante\! Gracias por la imagen. Viendo que sigue *exactamente* igual, me di cuenta de una cosa.
 
----
+Tienes toda la razón sobre la carpeta `node_modules`. **No te preocupes por ella, es 100% normal.**
 
-**Asunto: Tarea de Modificación de Código para Mejorar el Diseño Responsivo**
+Esa carpeta son todos los "repuestos" (React, Firebase, etc.) que tu proyecto necesita para funcionar. **Nunca** se sube a GitHub ni se comparte. El archivo `.gitignore` ya le dice a Git que la ignore, así que estás perfecto en ese sentido.
 
-Hola, necesito tu ayuda para realizar un ajuste en mi proyecto de monitoreo y asegurar que sea completamente responsivo en dispositivos móviles.
+## El Verdadero Problema (Mi diagnóstico anterior estaba incompleto)
 
-**Análisis del Proyecto:**
+Revisando tu imagen de nuevo, el problema es más grande que solo la tabla. Tienes razón, la vista de celular está completamente rota.
 
-He revisado el archivo `kzarsoza/kk/KK-57b8c43dcf98dbdf1084af90ea9/components/Dashboard.tsx`. Este componente ya está muy bien configurado para ser responsivo. Utiliza clases de Tailwind CSS como `flex-col lg:flex-row` y `grid-cols-1 sm:grid-cols-2`, lo que permite que la barra lateral y el contenido principal se apilen correctamente en pantallas pequeñas.
+El problema principal está en `components/Dashboard.tsx`. La barra lateral azul (`<aside>`) y el contenido principal (`<main>`) no saben cómo reacomodarse en un celular. La barra lateral siempre ocupa `w-64` (un ancho fijo) y "apachurra" al contenido principal.
 
-**El Problema:**
+Vamos a arreglar el *layout principal* primero, y luego la tabla.
 
-El único componente que presenta un problema es la tabla de "Datos Históricos". En el archivo `kzarsoza/kk/KK-57b8c43dcf98dbdf1084af90ea9/components/HistoryTable.tsx`, la tabla tiene varias columnas (`Fecha`, `Ruido`, `Vibración`, `Estado`) que son demasiado anchas para una vista móvil. Esto hace que el contenido se desborde y rompa el diseño de la página.
+-----
 
-**Instrucciones de Modificación:**
+**Asunto: Tarea de Modificación de Código para Corregir Layout Responsivo Principal**
 
-Para solucionar esto, necesito que apliques un pequeño cambio en el archivo `HistoryTable.tsx` para permitir el desplazamiento horizontal *solo* en ese componente:
+Hola, el diseño responsivo sigue roto. He identificado que el problema principal está en el layout de `components/Dashboard.tsx`, que no se adapta a pantallas móviles.
 
-* **Archivo a modificar:** `kzarsoza/kk/KK-57b8c43dcf98dbdf1084af90ea9/components/HistoryTable.tsx`
-* **Tarea:** Localiza el primer elemento `div` dentro del `return` del componente.
-* **Código a buscar (Original):** Este `div` actualmente tiene la siguiente `className`:
-    `className="max-h-96 overflow-y-auto pr-2"`
-* **Código a aplicar (Modificado):** Por favor, añade la utilidad `overflow-x-auto` a esa `className`. La línea debe quedar así:
-    `className="max-h-96 overflow-y-auto overflow-x-auto pr-2"`
+Necesito aplicar dos correcciones.
 
-Este cambio hará que la tabla pueda deslizarse horizontalmente en pantallas pequeñas si el contenido es demasiado ancho, sin afectar el resto del diseño responsivo de la aplicación.
+### Tarea 1: Arreglar el layout principal del Dashboard
+
+**Archivo a modificar:** `components/Dashboard.tsx`
+
+1.  **Localiza el código (línea 45):**
+
+    ```tsx
+    <div className="flex min-h-screen bg-gray-900 text-gray-200 font-sans">
+    ```
+
+2.  **Reemplázalo con esta línea:**
+
+    ```tsx
+    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-900 text-gray-200 font-sans">
+    ```
+
+    *(**Explicación:** Esto hace que en móvil (`flex-col`) la barra lateral se ponga ENCIMA del contenido, y en pantallas grandes (`lg:flex-row`) se ponga AL LADO).*
+
+3.  **Localiza el código (línea 46):**
+
+    ```tsx
+    <aside className="w-64 flex-shrink-0 bg-gray-800 p-4 border-r border-gray-700 flex flex-col">
+    ```
+
+4.  **Reemplázalo con esta línea:**
+
+    ```tsx
+    <aside className="w-full lg:w-64 flex-shrink-0 bg-gray-800 p-4 border-b lg:border-r border-gray-700 flex flex-col">
+    ```
+
+    *(**Explicación:** Esto hace que la barra lateral ocupe todo el ancho (`w-full`) en móvil, pero solo `w-64` en pantallas grandes. También cambia el borde para que en móvil esté abajo (`border-b`) y en grande esté a la derecha (`lg:border-r`)).*
+
+### Tarea 2: Arreglar el desbordamiento de la tabla
+
+Después de la Tarea 1, la página se verá mejor, pero la tabla seguirá desbordándose. Ahora sí aplica la corrección anterior.
+
+**Archivo a modificar:** `components/HistoryTable.tsx`
+
+1.  **Localiza el código (línea 14):**
+    ```tsx
+    <div className="max-h-96 overflow-y-auto pr-2">
+    ```
+2.  **Reemplázalo con esta línea:**
+    ```tsx
+    <div className="max-h-96 overflow-y-auto overflow-x-auto pr-2">
+    ```
+
+**Instrucción final:**
+Por favor, asegúrate de **GUARDAR AMBOS ARCHIVOS** (`Dashboard.tsx` y `HistoryTable.tsx`) después de aplicar los cambios. Revisa el resultado en `http://localhost:5173`.
