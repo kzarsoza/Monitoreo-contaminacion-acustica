@@ -12,6 +12,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
+  const MAX_MEASUREMENTS_DISPLAYED = 20; // Limit to the latest 20 measurements
   const [measurements, setMeasurements] = useState<ProcessedMeasurement[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isConnected, setIsConnected] = useState<boolean>(false);
@@ -57,7 +58,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     const unsubscribe = listenToRealtimeMeasurements(selectedNode, (data: FirebaseData) => {
       if (data && Object.keys(data).length > 0) {
         const processedData = parseFirebaseData(data);
-        setMeasurements(processedData);
+        setMeasurements(processedData.slice(0, MAX_MEASUREMENTS_DISPLAYED));
         setIsConnected(true);
       } else {
         setMeasurements([]);
@@ -175,9 +176,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 {/* Chart and Table */}
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
                   <div className="xl:col-span-2 bg-gray-800 p-4 sm:p-6 rounded-2xl shadow-lg border border-gray-700">
-                    <h2 className="text-xl font-semibold text-white mb-4">Historial de Mediciones (Últimas 20)</h2>
+                    <h2 className="text-xl font-semibold text-white mb-4">Historial de Mediciones (Últimas 30)</h2>
                     {measurements.length > 0 ? (
-                      <HistoryChart data={measurements.slice(0, 20).reverse()} />
+                      <HistoryChart data={measurements.slice(0, 30).reverse()} />
                     ) : (
                       <div className="flex items-center justify-center h-80 text-gray-500">{isConnected ? 'Esperando datos...' : 'Sin datos para mostrar.'}</div>
                     )}
@@ -185,7 +186,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                   <div className="xl:col-span-1 bg-gray-800 p-4 sm:p-6 rounded-2xl shadow-lg border border-gray-700">
                     <h2 className="text-xl font-semibold text-white mb-4">Datos Históricos</h2>
                     {measurements.length > 0 ? (
-                      <HistoryTable data={measurements} />
+                      <HistoryTable data={measurements.slice(0, 30)} />
                     ) : (
                       <div className="flex items-center justify-center h-80 text-gray-500">{isConnected ? 'Esperando datos...' : 'Sin datos para mostrar.'}</div>
                     )}
