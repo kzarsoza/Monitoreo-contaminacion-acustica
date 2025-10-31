@@ -86,8 +86,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const isLive = isConnected && !isLoading;
 
   return (
-    <div className="flex min-h-screen bg-gray-900 text-gray-200 font-sans">
-      <aside className="w-64 flex-shrink-0 bg-gray-800 p-4 border-r border-gray-700 flex flex-col">
+    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-900 text-gray-200 font-sans">
+      <aside className="w-full lg:w-64 flex-shrink-0 bg-gray-800 p-4 border-b lg:border-r border-gray-700 flex flex-col">
         <h2 className="text-xl font-bold text-white mb-6 px-2">Nodos Sensores</h2>
         <nav className="flex-grow overflow-y-auto">
           <ul>
