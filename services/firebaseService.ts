@@ -38,7 +38,7 @@ export const logout = signOut;
 export const getAvailableNodes = async (): Promise<string[]> => {
   const dbRef = ref(getDatabase());
   try {
-    const snapshot = await get(child(dbRef, 'mediciones'));
+    const snapshot = await get(child(dbRef, 'nodos'));
     if (snapshot.exists()) {
       return Object.keys(snapshot.val());
     }

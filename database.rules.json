@@ -7,6 +7,9 @@
     "alert_status": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "nodos": {
+      ".read": "auth != null"
     }
   }
 }

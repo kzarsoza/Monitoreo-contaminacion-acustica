@@ -1,162 +1,92 @@
-¡Claro\! Aquí tienes un prompt consolidado con todas las instrucciones de corrección que hemos discutido, listo para que lo pases a una herramienta CLI.
+¡Estás en lo cierto\! Tu intuición es perfecta.
+
+El problema ya no es la *navegación* (porque la optimizamos para cargar solo 50 registros), sino la **carga inicial**.
+
+Cuando la página carga, la aplicación ejecuta la función `getAvailableNodes` (en `services/firebaseService.ts`) para saber qué nodos existen (Nodo\_01, Nodo\_02, etc.) y mostrarlos en la barra lateral.
+
+El problema es que esa función, como está escrita, le pide a Firebase **la totalidad de la ruta `/mediciones`**. Si tienes 4 nodos y 5 millones de registros en cada uno, estás intentando descargar **20 millones de registros** solo para obtener 4 nombres.
+
+La solución es una práctica estándar de Firebase llamada **"desnormalización"**: vamos a crear una lista separada que solo contenga los nombres de los nodos.
 
 -----
 
-**Inicio del Prompt para el CLI de Gemini**
+### 🛠️ Solución en 3 Pasos
 
-**Rol:** Eres un asistente experto en desarrollo frontend con React, TypeScript y Firebase.
+#### Paso 1: Crea la lista de nodos en Firebase
 
-**Objetivo:** Voy a proporcionarte el estado de tres archivos de mi proyecto. Tu tarea es aplicar las correcciones necesarias para solucionar problemas de rendimiento, reglas de seguridad y errores 404.
+Ve a tu consola de Firebase Realtime Database y añade una nueva ruta raíz llamada `nodos`. Dentro de ella, añade cada nodo con un valor `true`.
 
------
-
-### Tarea 1: Corregir las Reglas de Seguridad de Firebase
-
-Este es mi archivo de reglas actual. Necesita ser actualizado para incluir permisos para la ruta `alert_status`.
-
-**Archivo:** `database.rules.json`
-
-**Contenido a reemplazar:**
+Tiene que verse así (al mismo nivel que `mediciones` y `alert_status`):
 
 ```json
 {
-  "rules": {
-    "mediciones": {
+  "monitoreo-ruido-6c514-default-rtdb": {
+    "alert_status": { ... },
+    "mediciones": { ... },
+    "nodos": {
+      "Nodo_01": true,
+      "Nodo_02": true,
+      "Nodo_03": true,
+      "Nodo_04": true
+    }
+  }
+}
+```
+
+#### Paso 2: Modifica el código para leer la nueva lista
+
+Ahora, dile a tu aplicación que lea de esta nueva lista (que es súper ligera) en lugar de la ruta `mediciones` (que es gigante).
+
+1.  Abre el archivo `services/firebaseService.ts`.
+2.  Busca la función `getAvailableNodes`.
+3.  **Busca** esta línea:
+    ```typescript
+    const snapshot = await get(child(dbRef, 'mediciones'));
+    ```
+4.  **Reemplázala** por esta:
+    ```typescript
+    const snapshot = await get(child(dbRef, 'nodos'));
+    ```
+
+#### Paso 3: Actualiza tus Reglas de Seguridad
+
+Tu nueva ruta `nodos` también necesita permisos de lectura.
+
+1.  Abre tu archivo `database.rules.json` (o edítalo en la consola de Firebase).
+
+2.  Añade la regla para `nodos`. El archivo completo debe quedar así:
+
+    ```json
+    {
       "rules": {
         "mediciones": {
-          // Permite a CUALQUIER usuario autenticado (anónimo o no)
-          // leer y escribir datos bajo la ruta "mediciones".
           ".read": "auth != null",
           ".write": "auth != null"
+        },
+        "alert_status": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        },
+        "nodos": {
+          ".read": "auth != null"
         }
       }
     }
-  }
-}
-```
+    ```
 
-**Nuevo contenido:**
+3.  **¡Importante\!** Si editaste el archivo localmente, despliega las reglas con este comando:
 
-```json
-{
-  "rules": {
-    "mediciones": {
-      // Permite leer y escribir a cualquier usuario autenticado
-      ".read": "auth != null",
-      ".write": "auth != null"
-    },
-    "alert_status": {
-      // Permite leer y escribir a cualquier usuario autenticado
-      // (Necesario para que las Cloud Functions guarden el estado de la alerta)
-      ".read": "auth != null",
-      ".write": "auth != null"
-    }
-  }
-}
-```
+    ```bash
+    firebase deploy --only database
+    ```
 
 -----
 
-### Tarea 2: Optimizar la Consulta de Firebase (Rendimiento)
+### (Opcional) Limpieza Final
 
-Mi archivo `firebaseService.ts` descarga la base de datos completa, lo que congela la aplicación. Modifícalo para que solo descargue los últimos 50 registros.
+Veo que el error `index.css 404` sigue en tu consola. Para eliminarlo:
 
-**Archivo:** `services/firebaseService.ts`
+1.  Abre `index.html`.
+2.  **Elimina** la línea: `<link rel="stylesheet" href="/index.css">`.
 
-**1. Modifica la línea de importación:**
-
-**Busca:**
-
-```typescript
-import { getDatabase, ref, onValue, off, DataSnapshot, get, child } from 'firebase/database';
-```
-
-**Reemplaza con:**
-
-```typescript
-import { getDatabase, ref, onValue, off, DataSnapshot, get, child, query, orderByKey, limitToLast } from 'firebase/database';
-```
-
-**2. Modifica la función `listenToRealtimeMeasurements`:**
-
-**Busca este bloque completo:**
-
-```typescript
-export const listenToRealtimeMeasurements = (deviceId: string, callback: (data: FirebaseData) => void): (() => void) => {
-  const measurementsRef = ref(database, `mediciones/${deviceId}/`);
-
-  const listener = onValue(
-    measurementsRef,
-    (snapshot: DataSnapshot) => {
-      const data = snapshot.val();
-      callback(data || {});
-    },
-    (error) => {
-      console.error(`Firebase read failed for device ${deviceId}: `, error);
-      callback({});
-    }
-  );
-
-  // Return an unsubscribe function to be called on component unmount to prevent memory leaks
-  return () => {
-    off(measurementsRef, 'value', listener);
-  };
-};
-```
-
-**Reemplaza con este nuevo bloque optimizado:**
-
-```typescript
-export const listenToRealtimeMeasurements = (deviceId: string, callback: (data: FirebaseData) => void): (() => void) => {
-  const baseMeasurementsRef = ref(database, `mediciones/${deviceId}/`);
-
-  // ----- INICIO DE LA CORRECCIÓN -----
-  // Creamos una query que ordena por llave (timestamp)
-  // y limita la descarga solo a los últimos 50 registros.
-  const measurementsQuery = query(baseMeasurementsRef, orderByKey(), limitToLast(50));
-  // ----- FIN DE LA CORRECCIÓN -----
-
-  const listener = onValue(
-    measurementsQuery, // Usamos la query optimizada
-    (snapshot: DataSnapshot) => {
-      const data = snapshot.val();
-      callback(data || {});
-    },
-    (error) => {
-      console.error(`Firebase read failed for device ${deviceId}: `, error);
-      callback({});
-    }
-  );
-
-  // Devolver la función de desuscripción
-  return () => {
-    off(measurementsQuery, 'value', listener); // Nos desuscribimos de la query
-  };
-};
-```
-
------
-
-### Tarea 3: Corregir Error 404 de CSS
-
-En mi archivo `index.html`, estoy llamando a un archivo CSS que no existe y genera un error 404 en la consola.
-
-**Archivo:** `index.html`
-
-**Instrucción:** Busca y elimina la siguiente línea de este archivo:
-
-```html
-<link rel="stylesheet" href="/index.css">
-```
-
------
-
-### Tarea 4: Comando de Despliegue
-
-Finalmente, después de aplicar todos estos cambios, infórmame que debo ejecutar el siguiente comando en mi terminal para publicar las nuevas reglas de seguridad de Firebase:
-
-```bash
-firebase deploy --only database
-```
-
-**Fin del Prompt**
+Con estos cambios, tu aplicación debería cargar instantáneamente. ⚡
