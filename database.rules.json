@@ -1,6 +1,12 @@
 {
   "rules": {
-    ".read": "now < 1759035600000",  // 2025-9-28
-    ".write": "now < 1759035600000",  // 2025-9-28
+    "mediciones": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "alert_status": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
   }
 }

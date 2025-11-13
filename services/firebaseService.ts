@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, off, DataSnapshot, get, child } from 'firebase/database';
+import { getDatabase, ref, onValue, off, DataSnapshot, get, child, query, orderByKey, limitToLast } from 'firebase/database';
 import { 
   getAuth, 
   createUserWithEmailAndPassword, 
@@ -57,10 +57,16 @@ export const getAvailableNodes = async (): Promise<string[]> => {
  * @returns An unsubscribe function to clean up the listener.
  */
 export const listenToRealtimeMeasurements = (deviceId: string, callback: (data: FirebaseData) => void): (() => void) => {
-  const measurementsRef = ref(database, `mediciones/${deviceId}/`);
+  const baseMeasurementsRef = ref(database, `mediciones/${deviceId}/`);
+
+  // ----- INICIO DE LA CORRECCIÓN -----
+  // Creamos una query que ordena por llave (timestamp)
+  // y limita la descarga solo a los últimos 50 registros.
+  const measurementsQuery = query(baseMeasurementsRef, orderByKey(), limitToLast(50));
+  // ----- FIN DE LA CORRECCIÓN -----
 
   const listener = onValue(
-    measurementsRef,
+    measurementsQuery, // Usamos la query optimizada
     (snapshot: DataSnapshot) => {
       const data = snapshot.val();
       callback(data || {});
@@ -71,8 +77,8 @@ export const listenToRealtimeMeasurements = (deviceId: string, callback: (data: 
     }
   );
 
-  // Return an unsubscribe function to be called on component unmount to prevent memory leaks
+  // Devolver la función de desuscripción
   return () => {
-    off(measurementsRef, 'value', listener);
+    off(measurementsQuery, 'value', listener); // Nos desuscribimos de la query
   };
 };

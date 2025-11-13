@@ -1,71 +1,162 @@
-¡Ah, qué frustrante\! Gracias por la imagen. Viendo que sigue *exactamente* igual, me di cuenta de una cosa.
-
-Tienes toda la razón sobre la carpeta `node_modules`. **No te preocupes por ella, es 100% normal.**
-
-Esa carpeta son todos los "repuestos" (React, Firebase, etc.) que tu proyecto necesita para funcionar. **Nunca** se sube a GitHub ni se comparte. El archivo `.gitignore` ya le dice a Git que la ignore, así que estás perfecto en ese sentido.
-
-## El Verdadero Problema (Mi diagnóstico anterior estaba incompleto)
-
-Revisando tu imagen de nuevo, el problema es más grande que solo la tabla. Tienes razón, la vista de celular está completamente rota.
-
-El problema principal está en `components/Dashboard.tsx`. La barra lateral azul (`<aside>`) y el contenido principal (`<main>`) no saben cómo reacomodarse en un celular. La barra lateral siempre ocupa `w-64` (un ancho fijo) y "apachurra" al contenido principal.
-
-Vamos a arreglar el *layout principal* primero, y luego la tabla.
+¡Claro\! Aquí tienes un prompt consolidado con todas las instrucciones de corrección que hemos discutido, listo para que lo pases a una herramienta CLI.
 
 -----
 
-**Asunto: Tarea de Modificación de Código para Corregir Layout Responsivo Principal**
+**Inicio del Prompt para el CLI de Gemini**
 
-Hola, el diseño responsivo sigue roto. He identificado que el problema principal está en el layout de `components/Dashboard.tsx`, que no se adapta a pantallas móviles.
+**Rol:** Eres un asistente experto en desarrollo frontend con React, TypeScript y Firebase.
 
-Necesito aplicar dos correcciones.
+**Objetivo:** Voy a proporcionarte el estado de tres archivos de mi proyecto. Tu tarea es aplicar las correcciones necesarias para solucionar problemas de rendimiento, reglas de seguridad y errores 404.
 
-### Tarea 1: Arreglar el layout principal del Dashboard
+-----
 
-**Archivo a modificar:** `components/Dashboard.tsx`
+### Tarea 1: Corregir las Reglas de Seguridad de Firebase
 
-1.  **Localiza el código (línea 45):**
+Este es mi archivo de reglas actual. Necesita ser actualizado para incluir permisos para la ruta `alert_status`.
 
-    ```tsx
-    <div className="flex min-h-screen bg-gray-900 text-gray-200 font-sans">
-    ```
+**Archivo:** `database.rules.json`
 
-2.  **Reemplázalo con esta línea:**
+**Contenido a reemplazar:**
 
-    ```tsx
-    <div className="flex flex-col lg:flex-row min-h-screen bg-gray-900 text-gray-200 font-sans">
-    ```
+```json
+{
+  "rules": {
+    "mediciones": {
+      "rules": {
+        "mediciones": {
+          // Permite a CUALQUIER usuario autenticado (anónimo o no)
+          // leer y escribir datos bajo la ruta "mediciones".
+          ".read": "auth != null",
+          ".write": "auth != null"
+        }
+      }
+    }
+  }
+}
+```
 
-    *(**Explicación:** Esto hace que en móvil (`flex-col`) la barra lateral se ponga ENCIMA del contenido, y en pantallas grandes (`lg:flex-row`) se ponga AL LADO).*
+**Nuevo contenido:**
 
-3.  **Localiza el código (línea 46):**
+```json
+{
+  "rules": {
+    "mediciones": {
+      // Permite leer y escribir a cualquier usuario autenticado
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "alert_status": {
+      // Permite leer y escribir a cualquier usuario autenticado
+      // (Necesario para que las Cloud Functions guarden el estado de la alerta)
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}
+```
 
-    ```tsx
-    <aside className="w-64 flex-shrink-0 bg-gray-800 p-4 border-r border-gray-700 flex flex-col">
-    ```
+-----
 
-4.  **Reemplázalo con esta línea:**
+### Tarea 2: Optimizar la Consulta de Firebase (Rendimiento)
 
-    ```tsx
-    <aside className="w-full lg:w-64 flex-shrink-0 bg-gray-800 p-4 border-b lg:border-r border-gray-700 flex flex-col">
-    ```
+Mi archivo `firebaseService.ts` descarga la base de datos completa, lo que congela la aplicación. Modifícalo para que solo descargue los últimos 50 registros.
 
-    *(**Explicación:** Esto hace que la barra lateral ocupe todo el ancho (`w-full`) en móvil, pero solo `w-64` en pantallas grandes. También cambia el borde para que en móvil esté abajo (`border-b`) y en grande esté a la derecha (`lg:border-r`)).*
+**Archivo:** `services/firebaseService.ts`
 
-### Tarea 2: Arreglar el desbordamiento de la tabla
+**1. Modifica la línea de importación:**
 
-Después de la Tarea 1, la página se verá mejor, pero la tabla seguirá desbordándose. Ahora sí aplica la corrección anterior.
+**Busca:**
 
-**Archivo a modificar:** `components/HistoryTable.tsx`
+```typescript
+import { getDatabase, ref, onValue, off, DataSnapshot, get, child } from 'firebase/database';
+```
 
-1.  **Localiza el código (línea 14):**
-    ```tsx
-    <div className="max-h-96 overflow-y-auto pr-2">
-    ```
-2.  **Reemplázalo con esta línea:**
-    ```tsx
-    <div className="max-h-96 overflow-y-auto overflow-x-auto pr-2">
-    ```
+**Reemplaza con:**
 
-**Instrucción final:**
-Por favor, asegúrate de **GUARDAR AMBOS ARCHIVOS** (`Dashboard.tsx` y `HistoryTable.tsx`) después de aplicar los cambios. Revisa el resultado en `http://localhost:5173`.
+```typescript
+import { getDatabase, ref, onValue, off, DataSnapshot, get, child, query, orderByKey, limitToLast } from 'firebase/database';
+```
+
+**2. Modifica la función `listenToRealtimeMeasurements`:**
+
+**Busca este bloque completo:**
+
+```typescript
+export const listenToRealtimeMeasurements = (deviceId: string, callback: (data: FirebaseData) => void): (() => void) => {
+  const measurementsRef = ref(database, `mediciones/${deviceId}/`);
+
+  const listener = onValue(
+    measurementsRef,
+    (snapshot: DataSnapshot) => {
+      const data = snapshot.val();
+      callback(data || {});
+    },
+    (error) => {
+      console.error(`Firebase read failed for device ${deviceId}: `, error);
+      callback({});
+    }
+  );
+
+  // Return an unsubscribe function to be called on component unmount to prevent memory leaks
+  return () => {
+    off(measurementsRef, 'value', listener);
+  };
+};
+```
+
+**Reemplaza con este nuevo bloque optimizado:**
+
+```typescript
+export const listenToRealtimeMeasurements = (deviceId: string, callback: (data: FirebaseData) => void): (() => void) => {
+  const baseMeasurementsRef = ref(database, `mediciones/${deviceId}/`);
+
+  // ----- INICIO DE LA CORRECCIÓN -----
+  // Creamos una query que ordena por llave (timestamp)
+  // y limita la descarga solo a los últimos 50 registros.
+  const measurementsQuery = query(baseMeasurementsRef, orderByKey(), limitToLast(50));
+  // ----- FIN DE LA CORRECCIÓN -----
+
+  const listener = onValue(
+    measurementsQuery, // Usamos la query optimizada
+    (snapshot: DataSnapshot) => {
+      const data = snapshot.val();
+      callback(data || {});
+    },
+    (error) => {
+      console.error(`Firebase read failed for device ${deviceId}: `, error);
+      callback({});
+    }
+  );
+
+  // Devolver la función de desuscripción
+  return () => {
+    off(measurementsQuery, 'value', listener); // Nos desuscribimos de la query
+  };
+};
+```
+
+-----
+
+### Tarea 3: Corregir Error 404 de CSS
+
+En mi archivo `index.html`, estoy llamando a un archivo CSS que no existe y genera un error 404 en la consola.
+
+**Archivo:** `index.html`
+
+**Instrucción:** Busca y elimina la siguiente línea de este archivo:
+
+```html
+<link rel="stylesheet" href="/index.css">
+```
+
+-----
+
+### Tarea 4: Comando de Despliegue
+
+Finalmente, después de aplicar todos estos cambios, infórmame que debo ejecutar el siguiente comando en mi terminal para publicar las nuevas reglas de seguridad de Firebase:
+
+```bash
+firebase deploy --only database
+```
+
+**Fin del Prompt**
