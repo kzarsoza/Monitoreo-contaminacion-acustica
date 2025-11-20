@@ -7,11 +7,16 @@ export const parseFirebaseData = (data: FirebaseData): ProcessedMeasurement[] =>
       const noise = parseFloat(measurement.nivel_dB) || 0;
       
       let status: ProcessedMeasurement['status'] = 'Desconocido';
+
+      // Lógica corregida para cubrir decimales (ej. 65.96)
       if (noise >= 85) {
         status = 'Rojo';
-      } else if (noise >= 66 && noise <= 84) {
+      } else if (noise > 65) { 
+        // Al usar "else if", esto cubre automáticamente todo lo que sea 
+        // menor a 85 pero mayor a 65 (ej: 65.1, 66, 84.9)
         status = 'Amarillo';
-      } else if (noise <= 65) {
+      } else {
+        // Cubre todo lo que sea 65 o menos
         status = 'Verde';
       }
 
@@ -23,7 +28,7 @@ export const parseFirebaseData = (data: FirebaseData): ProcessedMeasurement[] =>
         status: status,
       };
     })
-    .sort((a, b) => parseInt(b.id) - parseInt(a.id)); // Sort by timestamp descending (newest first)
+    .sort((a, b) => parseInt(b.id) - parseInt(a.id));
 };
 
 export const getStatusColor = (status: ProcessedMeasurement['status']): string => {

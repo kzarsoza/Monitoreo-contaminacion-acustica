@@ -1,0 +1,58 @@
+¡Tienes toda la razón\! Tu análisis es correcto. El problema es que tu lógica actual tiene **"huecos" numéricos** donde los decimales se quedan sin clasificación.
+
+Al revisar tu archivo `utils/helpers.ts` y la imagen que subiste, vemos esto:
+
+  * **Tu código dice:** "Si es menor o igual a 65, es Verde" y "Si es mayor o igual a 66, es Amarillo".
+  * **El problema:** ¿Qué pasa con el número **65.96** que aparece en tu imagen?
+      * ¿Es `>= 66`? **No**.
+      * ¿Es `<= 65`? **No**.
+      * **Resultado:** Cae en el limbo y se marca como `"Desconocido"`.
+
+Aquí tienes la solución para cubrir todos los decimales arreglando el archivo `utils/helpers.ts`.
+
+### 🛠️ Solución: Eliminar los huecos en `utils/helpers.ts`
+
+Debes simplificar la lógica usando `else if` encadenados. De esta forma, si no es Rojo, el código asume automáticamente que es menor a 85, y así sucesivamente.
+
+**Reemplaza la función `parseFirebaseData` con este código:**
+
+```typescript
+export const parseFirebaseData = (data: FirebaseData): ProcessedMeasurement[] => {
+  if (!data) return [];
+  return Object.entries(data)
+    .map(([id, measurement]: [string, FirebaseMeasurement]) => {
+      const noise = parseFloat(measurement.nivel_dB) || 0;
+      
+      let status: ProcessedMeasurement['status'] = 'Desconocido';
+
+      // Lógica corregida para cubrir decimales (ej. 65.96)
+      if (noise >= 85) {
+        status = 'Rojo';
+      } else if (noise > 65) { 
+        // Al usar "else if", esto cubre automáticamente todo lo que sea 
+        // menor a 85 pero mayor a 65 (ej: 65.1, 66, 84.9)
+        status = 'Amarillo';
+      } else {
+        // Cubre todo lo que sea 65 o menos
+        status = 'Verde';
+      }
+
+      return {
+        id,
+        fecha: measurement.fecha,
+        noise: noise,
+        vibration: parseFloat(measurement.vibracion_ms2) || 0,
+        status: status,
+      };
+    })
+    .sort((a, b) => parseInt(b.id) - parseInt(a.id));
+};
+```
+
+### ¿Por qué funciona esto?
+
+1.  **`noise >= 85`**: Atrapa los valores peligrosos primero.
+2.  **`else if (noise > 65)`**: Si el código llega aquí, ya sabemos que **no es \>= 85**. Así que solo preguntamos si es mayor a 65. Esto atrapa el **65.96** (que antes fallaba) y lo pone en **Amarillo**.
+3.  **`else`**: Si no es ninguno de los anteriores, por descarte es **Verde** (65 o menos).
+
+Con este cambio, ese registro de `65.96` pasará automáticamente a estado **Amarillo** y desaparecerán los "Desconocido".
